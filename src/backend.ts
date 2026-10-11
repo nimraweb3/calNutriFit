@@ -38,6 +38,7 @@ async function syncRows<T extends {id:string}>(table:string,before:T[],after:T[]
 export async function saveJournal(userId:string,before:Store,next:Store){
  // Changes are scoped to individual records; no whole-journal replacement.
  await syncRows('food_entries',before.entries,next.entries,userId,e=>encodeFood(e,userId));
+ await syncRows('supplement_entries',before.supplementHistory,next.supplementHistory,userId,r=>({user_id:userId,date:r.date,quantity:r.quantity,taken_at:r.takenAt,supplement_data:{name:r.name,servingUnit:r.unit,nutrients:{calories:r.nutrition.calories/r.quantity,protein:r.nutrition.protein/r.quantity,carbs:r.nutrition.carbs/r.quantity,fats:r.nutrition.fat/r.quantity,fiber:r.nutrition.fiber/r.quantity}}}));
  await syncRows('workout_entries',before.workouts,next.workouts,userId,w=>({user_id:userId,date:w.date,exercise_data:{name:w.name,calnutrifitIdentity:w.identity},duration:w.minutes,calories_burned:w.calories}));
  for(const w of next.weights){if(same(w,before.weights.find(b=>b.date===w.date)))continue;checked(await cloud!.from('weight_logs').upsert({user_id:userId,date:w.date,weight:w.weight},{onConflict:'user_id,date'}));}
  await syncRows('fitness_goals',before.goals,next.goals,userId,g=>({user_id:userId,title:g.title,start_date:g.start,end_date:g.end,target_workouts:g.workouts,status:g.status,type:'weekly'}));

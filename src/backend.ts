@@ -1,0 +1,49 @@
+import {createClient} from '@supabase/supabase-js';
+import {emptyStore,portion,type Entry,type Food,type Store,type Profile} from './engine';
+import {foodDatabase} from './legacy/foodDatabase';
+const env=(import.meta as any).env;
+export const backendUrl=String(env.VITE_SUPABASE_URL||'').replace(/\/$/,'');
+export const publicKey=String(env.VITE_SUPABASE_PUBLISHABLE_KEY||env.VITE_SUPABASE_ANON_KEY||'');
+if(publicKey.startsWith('sb_secret_'))throw Error('A private key must never be configured in the frontend.');
+if(publicKey.startsWith('eyJ')){try{const payload=JSON.parse(atob(publicKey.split('.')[1]));if(payload.role!=='anon')throw Error('Only anonymous public project keys are allowed.')}catch{throw Error('Invalid or privileged browser key.')}}
+export const cloud=backendUrl&&publicKey?createClient(backendUrl,publicKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'calnutrifit-auth'}}):null;
+type Row=Record<string,any>;
+function checked<T extends {error:any}>(r:T):T{if(r.error)throw Error(r.error.message||'Database operation failed.');return r}
+const activities:Record<string,number>={sedentary:1.2,light:1.375,moderate:1.55,active:1.725,very_active:1.9};
+export function decodeFood(row:Row):Entry{
+ const original=row.food_item_data;
+ const {calnutrifit:snapshot,...sourceData}=original;
+ if(snapshot){const quantity=Number(row.quantity);if(!Number.isFinite(quantity)||quantity<=0)throw Error('Invalid saved food quantity.');const changed=quantity!==snapshot.grams;return {...snapshot,...(changed?{quantity,unit:'g',...portion(snapshot.food,quantity,'g')}:{}),sourceData,id:row.id,date:row.date,meal:row.meal_type.charAt(0).toUpperCase()+row.meal_type.slice(1)}}
+ const n=original.nutrients;
+ if(!n||!Number.isFinite(Number(original.servingSize))||Number(original.servingSize)<=0)throw Error('An existing food record has an invalid serving basis. No records were changed.');
+ const food:Food={id:original.id,name:original.name,category:original.category,grams:Number(original.servingSize),unit:'serving',calories:Number(n.calories),protein:Number(n.protein),carbs:Number(n.carbs),fat:Number(n.fats),fiber:Number(n.fiber),source:original.source||'Nutrio catalog · provenance not independently verified'};
+ const q=Number(row.quantity),ratio=q/food.grams;
+ return {id:row.id,date:row.date,meal:row.meal_type.charAt(0).toUpperCase()+row.meal_type.slice(1),food,quantity:q,unit:original.servingUnit==='ml'?'ml':'g',grams:q,sourceData,nutrition:{calories:food.calories*ratio,protein:food.protein*ratio,carbs:food.carbs*ratio,fat:food.fat*ratio,fiber:food.fiber*ratio}};
+}
+export function encodeFood(entry:Entry,userId:string){const f=entry.food;const {sourceData,...snapshot}=entry;return {user_id:userId,date:entry.date,meal_type:entry.meal.toLowerCase(),quantity:entry.grams,food_item_data:{...sourceData,id:f.id,name:f.name,category:f.category,servingSize:f.grams,servingUnit:sourceData?.servingUnit||'g',source:f.source,nutrients:{...(sourceData?.nutrients as Row||{}),calories:f.calories,protein:f.protein,carbs:f.carbs,fats:f.fat,fiber:f.fiber},calnutrifit:snapshot}}}
+export function decodeProfile(settings:Row):Profile|null{if(settings.calnutrifit?.profile)return settings.calnutrifit.profile;if(!settings.age||!settings.weight||!settings.height)return null;return {name:settings.name||'Your profile',age:settings.age,weight:settings.weight,height:settings.height,sex:settings.gender,activity:activities[settings.activityLevel]||1.2,goal:settings.goalType==='fat_loss'?'loss':settings.goalType==='muscle_gain'?'gain':'maintenance',special:false}}
+async function allRows(table:string,userId:string){const rows:Row[]=[];for(let offset=0;;offset+=500){const result=checked(await cloud!.from(table).select('*').eq('user_id',userId).order('id').range(offset,offset+499));rows.push(...(result.data||[]));if((result.data?.length||0)<500)break}return rows}
+export async function loadJournal(userId:string):Promise<Store>{
+ const [settings,entries,workouts,weights,goals,legacyRecipes,supplementRows]=await Promise.all([cloud!.from('user_settings').select('settings').eq('user_id',userId).maybeSingle().then(checked),allRows('food_entries',userId),allRows('workout_entries',userId),allRows('weight_logs',userId),allRows('fitness_goals',userId),allRows('recipes',userId),allRows('supplement_entries',userId)]);
+ const prefs=settings.data?.settings||{},extra=prefs.calnutrifit||{};
+ const supplementHistory=supplementRows.map(r=>{const p=r.supplement_data,n=p.nutrients||{},q=Number(r.quantity);return {id:r.id,date:r.date,name:p.name,quantity:q,unit:p.servingUnit||'serving',takenAt:r.taken_at,nutrition:{calories:Number(n.calories||0)*q,protein:Number(n.protein||0)*q,carbs:Number(n.carbs||0)*q,fat:Number(n.fats||0)*q,fiber:Number(n.fiber||0)*q}}});
+ const convertedRecipes=legacyRecipes.map(r=>({id:r.id,name:r.name,yield:r.items?.[0]?.calnutrifitYield||1,ingredients:(r.items||[]).map((i:Row)=>{if(i.food)return {food:i.food,quantity:i.quantity,unit:i.unit};const legacy=foodDatabase.find(f=>f.id===i.foodId);if(!legacy)throw Error('An existing recipe references a missing food. Resolve it in Nutrio before editing recipes.');return {food:decodeFood({id:'ingredient',date:'',meal_type:'snacks',quantity:i.quantity,food_item_data:legacy}).food,quantity:Number(i.quantity),unit:'g'}})}));
+ return {...emptyStore,supplementHistory,profile:decodeProfile(prefs),entries:entries.map(decodeFood),workouts:workouts.map(r=>({id:r.id,date:r.date,name:r.exercise_data.name||'Recorded workout',minutes:Number(r.duration),calories:Number(r.calories_burned),identity:r.exercise_data.calnutrifitIdentity})),weights:weights.map(r=>({id:r.id,date:r.date,weight:Number(r.weight)})),goals:goals.map(r=>({id:r.id,title:r.title,start:r.start_date,end:r.end_date,workouts:Number(r.target_workouts)||0,status:r.status})),recipes:[...convertedRecipes,...(extra.recipes||[])],supplements:extra.supplements||[],completed:extra.completed||{},level:extra.level||'Beginner'};
+}
+const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+async function syncRows<T extends {id:string}>(table:string,before:T[],after:T[],userId:string,encode:(v:T)=>Row){
+ for(const row of before.filter(r=>!after.some(a=>a.id===r.id)))checked(await cloud!.from(table).delete().eq('user_id',userId).eq('id',row.id));
+ for(const row of after){const old=before.find(b=>b.id===row.id);if(old&&same(old,row))continue;if(old){checked(await cloud!.from(table).update(encode(row)).eq('user_id',userId).eq('id',row.id));}else{checked(await cloud!.from(table).insert(encode(row)).select('id').single());}}
+}
+export async function saveJournal(userId:string,before:Store,next:Store){
+ // Changes are scoped to individual records; no whole-journal replacement.
+ await syncRows('food_entries',before.entries,next.entries,userId,e=>encodeFood(e,userId));
+ await syncRows('workout_entries',before.workouts,next.workouts,userId,w=>({user_id:userId,date:w.date,exercise_data:{name:w.name,calnutrifitIdentity:w.identity},duration:w.minutes,calories_burned:w.calories}));
+ for(const w of next.weights){if(same(w,before.weights.find(b=>b.date===w.date)))continue;checked(await cloud!.from('weight_logs').upsert({user_id:userId,date:w.date,weight:w.weight},{onConflict:'user_id,date'}));}
+ await syncRows('fitness_goals',before.goals,next.goals,userId,g=>({user_id:userId,title:g.title,start_date:g.start,end_date:g.end,target_workouts:g.workouts,status:g.status,type:'weekly'}));
+ await syncRows('recipes',before.recipes,next.recipes,userId,r=>({user_id:userId,name:r.name,items:r.ingredients.map(i=>({...i,foodId:i.food.id,calnutrifitYield:r.yield}))}));
+ const keys=['profile','supplements','completed','level'] as const;
+ if(keys.some(k=>!same(before[k],next[k]))){const result=checked(await cloud!.from('user_settings').select('settings,updated_at').eq('user_id',userId).maybeSingle());const old=result.data?.settings||{};const extra={...old.calnutrifit};for(const k of keys)if(!same(before[k],next[k]))extra[k]=next[k];const profile=next.profile;const settings={...old,calnutrifit:extra,...(!same(before.profile,next.profile)&&profile?{age:profile.age,weight:profile.weight,height:profile.height,gender:profile.sex,activityLevel:Object.keys(activities).find(k=>activities[k]===profile.activity),goalType:profile.goal==='loss'?'fat_loss':profile.goal==='gain'?'muscle_gain':'maintenance'}:{})};
+ if(result.data){const updated=checked(await cloud!.from('user_settings').update({settings,updated_at:new Date().toISOString()}).eq('user_id',userId).eq('updated_at',result.data.updated_at).select('user_id'));if(!updated.data?.length)throw Error('Settings changed on another device. Reload and try again.');}else checked(await cloud!.from('user_settings').insert({user_id:userId,settings}));}
+ return loadJournal(userId);
+}

@@ -1,14 +1,15 @@
 import { z } from 'zod';
 export type Nutrients = { calories:number; protein:number; carbs:number; fat:number; fiber:number; sugar?:number };
 export type Food = Nutrients & { id:string; name:string; category:string; grams:number; unit:string; source:string; note?:string; units?:Record<string,number> };
-export type Entry = { id:string; date:string; meal:string; food:Food; quantity:number; unit:string; grams:number; nutrition:Nutrients };
+export type Entry = { id:string; date:string; meal:string; food:Food; quantity:number; unit:string; grams:number; nutrition:Nutrients; sourceData?:Record<string,unknown> };
 export type Workout = { id:string; date:string; name:string; minutes:number; calories:number; identity?:string };
 export type Profile = { name:string; age:number; weight:number; height:number; sex:'male'|'female'; activity:number; goal:'maintenance'|'loss'|'gain'; special:boolean; target?:number };
 export type Goal = { id:string; title:string; start:string; end:string; workouts:number; status:'active'|'completed'|'archived' };
 export type Recipe = { id:string; name:string; yield:number; ingredients:{food:Food; quantity:number; unit:string}[] };
 export type Supplement = { id:string; name:string; amount:string; calories:number; protein:number; taken:string[] };
-export type Store = { entries:Entry[]; workouts:Workout[]; weights:{id:string;date:string;weight:number}[]; goals:Goal[]; recipes:Recipe[]; supplements:Supplement[]; profile:Profile|null; completed:Record<string,string[]>; level:string };
-export const emptyStore:Store={entries:[],workouts:[],weights:[],goals:[],recipes:[],supplements:[],profile:null,completed:{},level:'Beginner'};
+export type SupplementRecord={id:string;date:string;name:string;quantity:number;unit:string;nutrition:Nutrients;takenAt:string};
+export type Store = { entries:Entry[]; workouts:Workout[]; weights:{id:string;date:string;weight:number}[]; goals:Goal[]; recipes:Recipe[]; supplements:Supplement[]; supplementHistory:SupplementRecord[]; profile:Profile|null; completed:Record<string,string[]>; level:string };
+export const emptyStore:Store={entries:[],workouts:[],weights:[],goals:[],recipes:[],supplements:[],supplementHistory:[],profile:null,completed:{},level:'Beginner'};
 export const dayKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 export function shiftDay(date:string,amount:number){const d=new Date(date+'T12:00:00');d.setDate(d.getDate()+amount);return dayKey(d)}
 export const profileSchema=z.object({name:z.string().trim().min(1).max(60),age:z.number().min(18).max(100),weight:z.number().min(30).max(300),height:z.number().min(120).max(230),sex:z.enum(['male','female']),activity:z.union([z.literal(1.2),z.literal(1.375),z.literal(1.55),z.literal(1.725),z.literal(1.9)]),goal:z.enum(['maintenance','loss','gain']),special:z.boolean(),target:z.number().min(1200).max(6000).optional()});

@@ -21,3 +21,7 @@ No remote migration, function replacement, deployment or paid subscription was p
 The complete master specification is not finished: full onboarding, verified nutrition sources, verified animated exercise media, complete differentiated programs/player/timers, water, extended micronutrients, favorites, richer goals, agent consent/audit, and full accessibility/device regression work remain. This build is not production-ready.
 
 Source reused from `nimraweb3/nutrio-pulse-tracker` at `df1441c2ceb4d2eab2cc1dc96cfb6a88da3d8c83`. Imported catalog claims have not been independently verified.
+
+## Demo verification
+
+Created an isolated synthetic demo account. Credentials are in ignored `.env.demo`; never commit or publish this file. Password sign-in/sign-out passed. Authenticated CRUD passed for food, workouts, weight, goals, recipes and supplement logs; temporary records were deleted and deletion verified. The real application adapter passed food create/edit/delete and recipe yield/ingredient round trips. The existing AI chef returned HTTP 200, SSE content deltas and a completion marker for one synthetic request. Demo profile values are test data, not the user's measurements. OAuth, verification-email delivery, browser interaction coverage and two-user isolation are still unverified.

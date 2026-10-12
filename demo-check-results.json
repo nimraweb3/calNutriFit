@@ -1,0 +1,23 @@
+{
+  "account": "Demo account created or restored",
+  "email": "calnutrifit-demo-584eeb0a-0090-4814-b1f7-c8f679c62794@example.com",
+  "checks": [
+    "food_entries: insert/read/update passed",
+    "workout_entries: insert/read/update passed",
+    "weight_logs: insert/read/update passed",
+    "fitness_goals: insert/read/update passed",
+    "recipes: insert/read/update passed",
+    "supplement_entries: insert/read/update passed",
+    "user_settings: demo profile saved (synthetic measurements)",
+    "Anonymous access to known demo record IDs: blocked",
+    "Fresh password sign-in and sign-out passed"
+  ],
+  "cleanup": [
+    "food_entries: delete verified",
+    "workout_entries: delete verified",
+    "weight_logs: delete verified",
+    "fitness_goals: delete verified",
+    "recipes: delete verified",
+    "supplement_entries: delete verified"
+  ]
+}

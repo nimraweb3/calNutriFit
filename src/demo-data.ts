@@ -1,0 +1,6 @@
+import {emptyStore,dayKey,shiftDay,portion,type Store} from './engine';
+import {foods} from './catalog';
+export function createDemo():Store{
+ const today=dayKey();const entries=Array.from({length:14},(_,i)=>{const food=foods.find(f=>f.name.includes(i%2?'Chicken biryani':'Egg, boiled'))!;return {id:`demo-food-${i}`,date:shiftDay(today,-Math.floor(i/2)),meal:i%2?'Lunch':'Breakfast',food,quantity:i%2?1:2,unit:food.unit,...portion(food,i%2?1:2,food.unit)}});
+ return {...emptyStore,profile:{name:'Demo explorer',age:28,weight:70,height:170,sex:'female',activity:1.375,goal:'maintenance',special:false},preferences:{completed:true,goal:'Improve overall health',units:'metric',workouts:['Home workouts','Walking'],diet:'Regular',allergies:'',cuisines:'Pakistani'},entries,workouts:[0,2,4].map(i=>({id:`demo-workout-${i}`,date:shiftDay(today,-i),name:'Sample walk',minutes:30,calories:129})),weights:[0,3,6].map(i=>({id:`demo-weight-${i}`,date:shiftDay(today,-i),weight:70+i*.05})),recipes:[{id:'demo-recipe',name:'Egg & rice bowl',yield:2,cookMinutes:15,instructions:'Warm the cooked rice. Serve with boiled eggs and your favorite seasonings.',ingredients:[{food:foods.find(f=>f.name==='Rice, cooked')!,quantity:2,unit:'cup'},{food:foods.find(f=>f.name==='Egg, boiled')!,quantity:2,unit:'piece'}]}]};
+}

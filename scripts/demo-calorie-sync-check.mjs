@@ -23,5 +23,5 @@ try{
 }catch(e){console.error(e.message);process.exitCode=1}
 finally{
  if(userId&&before){const current=await backend.loadJournal(userId);await backend.saveJournal(userId,current,{...current,entries:current.entries.filter(e=>!(e.date===date&&e.food.name.startsWith(prefix))),supplementHistory:current.supplementHistory.filter(e=>!(e.date===date&&e.name.startsWith(prefix))),workouts:current.workouts.filter(e=>!(e.date===date&&e.name.startsWith(prefix)))});console.log('Synthetic QA records removed');}
- if(backend?.cloud)await backend.cloud.auth.signOut();await server.close();
+ if(backend?.cloud)await backend.cloud.auth.signOut({scope:'local'});await server.close();
 }

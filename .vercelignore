@@ -1,0 +1,6 @@
+.env*
+.git/
+.workout-assets/
+node_modules/
+scripts/demo-*
+*-preview.png

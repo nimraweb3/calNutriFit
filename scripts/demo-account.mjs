@@ -40,11 +40,11 @@ try{
  report.checks.push('user_settings: demo profile saved (synthetic measurements)');
  const anon=makeClient();for(const {table,id} of created){const rows=check(await anon.from(table).select('id').eq('id',id),'Anonymous isolation');if(rows.length)throw Error(`${table}: anonymous data exposure`)}
  report.checks.push('Anonymous access to known demo record IDs: blocked');
- const fresh=makeClient();check(await fresh.auth.signInWithPassword(credentials),'Fresh sign-in');check(await fresh.auth.signOut(),'Sign-out');report.checks.push('Fresh password sign-in and sign-out passed');
+ const fresh=makeClient();check(await fresh.auth.signInWithPassword(credentials),'Fresh sign-in');check(await fresh.auth.signOut({scope:'local'}),'Sign-out');report.checks.push('Fresh password sign-in and sign-out passed');
 }catch(error){report.error=error.message;process.exitCode=1;}
 finally{
  for(const {table,id} of created){const result=await client.from(table).delete().eq('user_id',uid).eq('id',id);if(result.error){report.cleanup.push(`${table}: failed`);process.exitCode=1;}else{const read=await client.from(table).select('id').eq('id',id);report.cleanup.push(`${table}: ${!read.error&&read.data.length===0?'delete verified':'delete not verified'}`);}}
- await client.auth.signOut();
+ await client.auth.signOut({scope:'local'});
  fs.writeFileSync('demo-check-results.json',JSON.stringify(report,null,2));
  console.log(JSON.stringify(report,null,2));
 }

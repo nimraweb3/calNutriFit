@@ -29,4 +29,4 @@ try{
  await backend.saveJournal(uid,state,{...state,recipes:state.recipes.filter(r=>r.id!==savedRecipe.id)});
  results.push('Synthetic recipe removed');
 }catch(e){results.push(`FAILED: ${e.message}`);process.exitCode=1;}
-finally{if(backend?.cloud)await backend.cloud.auth.signOut();await server.close();console.log(JSON.stringify(results,null,2));}
+finally{if(backend?.cloud)await backend.cloud.auth.signOut({scope:'local'});await server.close();console.log(JSON.stringify(results,null,2));}

@@ -44,3 +44,9 @@ Administrator-access check: signed in to Supabase using the existing nimraweb3 G
 The public `/auth/v1/authorize?provider=google` endpoint returns HTTP 400 with `Unsupported provider: missing OAuth secret`, including when the CalNutriFit production callback is supplied. The Google-enabled flag alone does not mean the provider is fully configured.
 
 The project administrator must configure a Google Web OAuth client ID and client secret in Supabase Authentication > Sign In / Providers > Google. Keep the secret server-side. Google must authorize `https://ydlcbisiardwepgjyawb.supabase.co/auth/v1/callback`; Supabase must allow `https://calnutrifit.vercel.app/auth/callback`. Then verify actual Google consent and the returning session. The current GitHub-authenticated Supabase account has no access to this project, so this configuration could not be applied.
+
+## Google sign-in repair (2026-10-13)
+
+The Nutrio project is Lovable Cloud with Google set to Managed by Lovable. The missing-secret response from the direct Supabase OAuth endpoint was caused by calling the wrong flow; it does not mean a new Google client secret needs to be created. With the user's approval, added and saved the exact redirect `https://calnutrifit.vercel.app/auth/callback` in Lovable Cloud > Users > Auth settings > Advanced, retaining the original Site URL and redirects.
+
+AuthPanel now uses the official @lovable.dev/cloud-auth-js SDK and the existing Nutrio broker at `https://nutrio-pulse-tracker.lovable.app/~oauth/initiate`. Google login deliberately returns to the approved production callback, including when initiated in a local preview. Do not use the raw Supabase Google endpoint with this managed configuration. A browser check through the broker successfully returned to authenticated CalNutriFit onboarding. All 37 tests and the production build passed after the integration change.

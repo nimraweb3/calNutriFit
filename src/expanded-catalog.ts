@@ -1,6 +1,49 @@
-import {foodDatabase} from './legacy/foodDatabase';
-import {supplementDatabase} from './legacy/supplementDatabase';
-import type {Food} from './engine';
-const isSupplement=(f:typeof foodDatabase[number])=>/supplement/i.test(f.category)||/whey|creatine|mass gainer|protein powder/i.test(f.name);
-export const importedFoods:Food[]=foodDatabase.filter(f=>!isSupplement(f)).map(f=>({id:`nutrio-${f.id}`,name:f.name,category:/pakistani/i.test(f.category)||/^pk\d/.test(f.id)?'Pakistani Cuisine':f.category,grams:f.servingSize,unit:f.servingUnit==='ml'?'ml serving':'serving',calories:f.nutrients.calories,protein:f.nutrients.protein,carbs:f.nutrients.carbs,fat:f.nutrients.fats,fiber:f.nutrients.fiber,source:'Nutrio catalog · approximate, unverified',note:`Reference serving: ${f.servingSize} ${f.servingUnit}. Recipes, oil and brands vary; use your label or recipe when available.`}));
-export const supplementCatalog=[...supplementDatabase.map(f=>({id:f.id,name:f.name,category:f.category,amount:`${f.servingSize} ${f.servingUnit}`,calories:f.nutrients.calories,protein:f.nutrients.protein,carbs:f.nutrients.carbs,fat:f.nutrients.fats,fiber:f.nutrients.fiber})),...foodDatabase.filter(isSupplement).map(f=>({id:f.id,name:f.name,category:'Protein & fitness',amount:`${f.servingSize} ${f.servingUnit}`,calories:f.nutrients.calories,protein:f.nutrients.protein,carbs:f.nutrients.carbs,fat:f.nutrients.fats,fiber:f.nutrients.fiber}))];
+import { foodDatabase } from "./legacy/foodDatabase";
+import { supplementDatabase } from "./legacy/supplementDatabase";
+import type { Food } from "./engine";
+const isSupplement = (f: (typeof foodDatabase)[number]) =>
+  /supplement/i.test(f.category) ||
+  /whey|creatine|mass gainer|protein powder/i.test(f.name);
+export const importedFoods: Food[] = foodDatabase
+  .filter((f) => !isSupplement(f))
+  .map((f) => ({
+    id: `nutrio-${f.id}`,
+    name: f.name,
+    category:
+      /pakistani/i.test(f.category) || /^pk\d/.test(f.id)
+        ? "Pakistani Cuisine"
+        : f.category,
+    grams: f.servingSize,
+    unit: f.servingUnit === "ml" ? "ml serving" : "serving",
+    calories: f.nutrients.calories,
+    protein: f.nutrients.protein,
+    carbs: f.nutrients.carbs,
+    fat: f.nutrients.fats,
+    fiber: f.nutrients.fiber,
+    source: "Nutrio catalog · approximate, unverified",
+    note: `Reference serving: ${f.servingSize} ${f.servingUnit}. Recipes, oil and brands vary; use your label or recipe when available.`,
+  }));
+export const supplementCatalog = [
+  ...supplementDatabase.map((f) => ({
+    id: f.id,
+    name: f.name,
+    category: f.category,
+    amount: `${f.servingSize} ${f.servingUnit}`,
+    calories: f.nutrients.calories,
+    protein: f.nutrients.protein,
+    carbs: f.nutrients.carbs,
+    fat: f.nutrients.fats,
+    fiber: f.nutrients.fiber,
+  })),
+  ...foodDatabase.filter(isSupplement).map((f) => ({
+    id: f.id,
+    name: f.name,
+    category: "Protein & fitness",
+    amount: `${f.servingSize} ${f.servingUnit}`,
+    calories: f.nutrients.calories,
+    protein: f.nutrients.protein,
+    carbs: f.nutrients.carbs,
+    fat: f.nutrients.fats,
+    fiber: f.nutrients.fiber,
+  })),
+];

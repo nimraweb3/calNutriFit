@@ -1,27 +1,22 @@
 # CalNutriFit
 
-React 18 + TypeScript + Vite nutrition and fitness journal, connected to the existing Nutrio Pulse Tracker Supabase infrastructure.
+Nutrition and workout journal built with React 18, strict TypeScript and Vite. It reuses Nutrio’s Lovable Cloud/Supabase authentication and user-owned data, deployed at https://calnutrifit.vercel.app/.
 
-Run `npm install`, `npm run dev`, `npm test`, and `npm run build`. Existing public project configuration is saved in ignored `.env.local`; private server keys were not copied. Configure the same public variables on the hosting provider.
+## Development
 
-## Infrastructure reuse
+Use Node 24. Run npm ci, copy .env.example to .env.local and set the public Supabase project URL and anon/publishable key. Run npm run dev. No service-role or AI provider secret belongs in a VITE_ variable.
+Run npm test for business-logic and regression tests. npm run build performs TypeScript checks, builds assets and prerenders the public landing page. CI configuration is in .github/workflows/quality.yml.
 
-`src/backend.ts` connects the original food, workout, weight, goals, recipes, supplement history and user settings tables. Queries are user-scoped and existing row-level security remains the authorization boundary. Inserts accept database-generated IDs. CalNutriFit-specific preferences and supplement plans use a namespaced property in existing user settings. Prior supplement history contributes to nutrition totals. New supplement plan completion is not mirrored into the old Nutrio log.
+## Architecture and verification
 
-`src/ChefAssistant.tsx` calls the existing chef function using the signed-in user's token. Provider keys remain on the server. Streaming, cancellation and retry are implemented. Only entered ingredients/preferences are sent; the health profile and journal are not attached.
+src/backend.ts maps existing shared tables without replacing user data. src/engine.ts, daily-balance.ts and analytics-data.ts implement calculations. Food entries store nutrition snapshots. AuthPanel uses Lovable-managed Google OAuth; direct Supabase Google OAuth is not appropriate for this configuration. Chart/recipe/AI panels load on demand.
 
-The frontend has its own CalNutriFit logo, colors and protected sign-in experience. Both applications share account-owned records: editing a food or workout here affects the same record in Nutrio.
+See [production audit](docs/PRODUCTION-AUDIT.md), [operations and schema](docs/OPERATIONS.md), and [deployment history](DEPLOYMENT.md) for evidence and remaining gates.
 
-## Verification and remaining work
+This application is not yet certified production-ready. Outstanding work includes full table-by-table cross-user authorization tests, server AI controls, atomic multi-record saves, account deletion, email delivery verification, nutrition provenance, operator privacy/retention policy and wider accessibility/performance validation. A passing build or dependency scan does not prove those properties.
 
-The auth settings endpoint returned 200 and reported email and Google enabled. Anonymous reads returned zero rows from seven journal tables; this is not a two-user isolation test. Automated tests cover calculations, parser behavior and legacy schema mappings. Real login, cloud mutations, OAuth redirects, email delivery, AI generation and two-user isolation still need authenticated testing.
+## Test data and privacy
 
-No remote migration, function replacement, deployment or paid subscription was performed. The original chef function still needs review for payload validation, rate limiting and error redaction. New CalNutriFit recipes can contain food identifiers that the old Nutrio recipe UI does not understand. Multiple-row saves are not transactional; failed saves reload the server state and are not automatically retried. History is paginated but loads all records; bounded UI loading remains a scaling task.
+Demo mode is labeled sample data and does not save. Integration scripts use dedicated synthetic accounts; never substitute a personal account. .env.demo and .env.audit-test are ignored credentials. No personal journal data is sent to public SEO metadata. AI only receives inputs and preferences the user elects to send. Reference catalogs contain estimates, not independently verified nutritional records.
 
-The complete master specification is not finished: full onboarding, verified nutrition sources, verified animated exercise media, complete differentiated programs/player/timers, water, extended micronutrients, favorites, richer goals, agent consent/audit, and full accessibility/device regression work remain. This build is not production-ready.
-
-Source reused from `nimraweb3/nutrio-pulse-tracker` at `df1441c2ceb4d2eab2cc1dc96cfb6a88da3d8c83`. Imported catalog claims have not been independently verified.
-
-## Demo verification
-
-Created an isolated synthetic demo account. Credentials are in ignored `.env.demo`; never commit or publish this file. Password sign-in/sign-out passed. Authenticated CRUD passed for food, workouts, weight, goals, recipes and supplement logs; temporary records were deleted and deletion verified. The real application adapter passed food create/edit/delete and recipe yield/ingredient round trips. The existing AI chef returned HTTP 200, SSE content deltas and a completion marker for one synthetic request. Demo profile values are test data, not the user's measurements. OAuth, verification-email delivery, browser interaction coverage and two-user isolation are still unverified.
+Original reference source: nimraweb3/nutrio-pulse-tracker at df1441c2ceb4d2eab2cc1dc96cfb6a88da3d8c83. Both applications share records, so editing shared logs affects both.

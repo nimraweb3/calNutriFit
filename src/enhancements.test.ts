@@ -6,9 +6,9 @@ import { analyticsRows, rangeDays, summarize } from './analytics-data';
 import { parseRecipes } from './recipe-ai';
 import { foods } from './catalog';
 describe('personalization and analytics', () => {
-    it('validates onboarding and rejects missing workout preferences', () => {
+    it('allows skipped workout preferences while validating measurements', () => {
         const p = createDemo().preferences!; expect(preferencesSchema.safeParse(p).success).toBe(true);
-        expect(preferencesSchema.safeParse({ ...p, workouts: [] }).success).toBe(false);
+        expect(preferencesSchema.safeParse({ ...p, workouts: [] }).success).toBe(true);
         expect(preferencesSchema.safeParse({ ...p, targetWeight: 0 }).success).toBe(false);
     });
     it('builds independent demo stores without mutating real records', () => {

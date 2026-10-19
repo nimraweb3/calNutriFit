@@ -294,7 +294,7 @@ async function syncRows<T extends { id: string }>(
 ) {
   for (const row of before.filter((r) => !after.some((a) => a.id === r.id)))
     checked(
-      await cloud!.from(table).delete().eq("user_id", userId).eq("id", row.id),
+      await cloud!.from(table).delete().eq("user_id", userId).eq("id", row.id).select("id").single(),
     );
   for (const row of after) {
     const old = before.find((b) => b.id === row.id);
@@ -305,7 +305,8 @@ async function syncRows<T extends { id: string }>(
           .from(table)
           .update(encode(row))
           .eq("user_id", userId)
-          .eq("id", row.id),
+          .eq("id", row.id)
+          .select("id").single(),
       );
     } else {
       checked(

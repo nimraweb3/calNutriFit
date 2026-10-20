@@ -1,0 +1,7 @@
+import {nutrientDefinitions, type Details, type NutrientKey} from './nutrient-data';
+export function NutrientFields({value,onChange}:{value:Details|undefined;onChange:(v:Details)=>void}){
+ return <details><summary>Vitamins, minerals, sugar & saturated fat (optional)</summary><p className="help">Copy your exact label amounts per serving. Leave unavailable amounts blank. Zero means the label confirms zero. Use the units shown; do not enter IU as mcg.</p><div className="form-grid two">{(Object.keys(nutrientDefinitions) as NutrientKey[]).map(k=><label className="field" key={k}><span>{nutrientDefinitions[k][0]} ({nutrientDefinitions[k][1]})</span><input type="number" min="0" step="any" value={value?.[k]??''} onChange={e=>{const next={...value};if(e.target.value==='')delete next[k];else next[k]=Number(e.target.value);onChange(next)}}/></label>)}</div></details>;
+}
+export function NutritionDetails({details}:{details:Details|undefined}){
+ return <details><summary>Detailed nutrition for this portion</summary><p className="help">Label-entered values are not independently verified. A dash means unavailable, not zero.</p><dl className="settings-list">{(Object.keys(nutrientDefinitions) as NutrientKey[]).map(k=><div key={k}><dt>{nutrientDefinitions[k][0]}</dt><dd>{details?.[k]===undefined?'—':`${Number(details[k]!.toFixed(3))} ${nutrientDefinitions[k][1]}`}</dd></div>)}</dl></details>;
+}

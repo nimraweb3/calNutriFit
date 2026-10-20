@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   const query: Record<string, any> = {};
   for (const name of ['from', 'delete', 'update', 'insert', 'eq', 'is', 'select']) query[name] = vi.fn(() => query);
@@ -9,10 +9,8 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => mock }));
 describe('journal mutation confirmation', () => {
   beforeEach(() => {
     vi.resetModules(); vi.clearAllMocks();
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
-    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test');
+    // Public test configuration is supplied at transform time by vitest.config.ts.
   });
-  afterEach(() => vi.unstubAllEnvs());
   it.each(['update', 'delete'])('does not report a zero-row %s as saved', async operation => {
     const { saveJournal } = await import('./backend');
     const { emptyStore } = await import('./engine');

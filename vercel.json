@@ -51,6 +51,18 @@
     {
       "source": "/reset-password",
       "destination": "/index.html"
+    },
+    {
+      "source": "/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/progress",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/nutrition",
+      "destination": "/index.html"
     }
   ],
   "headers": [

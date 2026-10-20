@@ -1,0 +1,14 @@
+import {useState} from 'react';
+import {shiftDay,type Store,type SupplementRecord} from './engine';
+import type {UpdateJournal} from './preferences';
+import {resizeDose} from './supplement-tracking';
+import {NutritionDetails} from './NutritionDetails';
+export default function SupplementHistory({data,date,save}:{data:Store;date:string;save:UpdateJournal}){
+ const [days,setDays]=useState('1'),[editing,setEditing]=useState<SupplementRecord|null>(null),[quantity,setQuantity]=useState('1'),[error,setError]=useState(''),[busy,setBusy]=useState(false),[remove,setRemove]=useState('');
+ const rows=data.supplementHistory.filter(r=>r.date<=date&&(days==='all'||r.date>=shiftDay(date,1-Number(days)))).sort((a,b)=>b.date.localeCompare(a.date));
+ return <section className="card"><h2>Supplement intake history</h2><label className="field"><span>History ending {date}</span><select value={days} onChange={e=>setDays(e.target.value)}><option value="1">Selected day</option><option value="7">7 days</option><option value="30">30 days</option><option value="all">All history</option></select></label>
+ {editing&&<form className="notice" onSubmit={async e=>{e.preventDefault();if(busy)return;setBusy(true);setError('');try{const changed=resizeDose(editing,Number(quantity));if(await save(s=>({...s,supplementHistory:s.supplementHistory.map(r=>r.id===changed.id?changed:r)})))setEditing(null);else setError('Not saved. Your entered amount is preserved.')}catch(e){setError((e as Error).message)}finally{setBusy(false)}}}><h3>Edit {editing.name} · {editing.date}</h3><label className="field"><span>Servings taken</span><input required min=".01" max="100" step="any" type="number" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label><p>Uses this entry’s original label snapshot, even if the saved product has since changed.</p>{error&&<p role="alert">{error}</p>}<button disabled={busy}>Save intake</button><button type="button" onClick={()=>setEditing(null)}>Cancel</button></form>}
+ {!rows.length&&<p>No supplement intakes recorded in this period.</p>}
+ {rows.map(r=><section className="supplement-product" key={r.id}><h3>{r.name}</h3><p>{r.date} · {r.quantity} × {r.unit} · {Math.round(r.nutrition.calories)} kcal</p><NutritionDetails details={r.nutrition.details}/><button className="text-button" onClick={()=>{setEditing(r);setQuantity(String(r.quantity));setError('')}}>Edit intake</button><button className="text-button" onClick={()=>setRemove(r.id)}>Delete intake</button>{remove===r.id&&<div><p>Delete this intake and its nutrient contribution?</p><button disabled={busy} onClick={async()=>{setBusy(true);try{if(await save(s=>({...s,supplementHistory:s.supplementHistory.filter(x=>x.id!==r.id)})))setRemove('')}finally{setBusy(false)}}}>Confirm deletion</button><button onClick={()=>setRemove('')}>Cancel</button></div>}</section>)}
+ </section>;
+}

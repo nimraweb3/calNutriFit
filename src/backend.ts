@@ -1,3 +1,4 @@
+import {scaleDetails} from './nutrient-data';
 import { createClient } from "@supabase/supabase-js";
 import {
   emptyStore,
@@ -39,6 +40,22 @@ export const cloud =
       })
     : null;
 type Row = Record<string, any>;
+// Keep the exact database values outside the serializable journal/export.
+// Each loaded journal owns its snapshot, including when another tab reloads.
+const rowSnapshots = new WeakMap<Store, Record<string, Row[]>>();
+function guardRow(query: any, row: Row) {
+  for (const [column, value] of Object.entries(row)) {
+    if (column === "id" || column === "user_id" || column === "created_at" || value === undefined) continue;
+    query = value === null ? query.is(column, null)
+      : query.eq(column, typeof value === "object" ? JSON.stringify(value) : value);
+  }
+  return query;
+}
+function confirmedMutation(result: {error:any;data:any}) {
+  if (result.error?.code === "PGRST116" || (!result.error && !result.data))
+    throw Error("This record changed or was removed on another device. Reload and review it before saving.");
+  return checked(result);
+}
 function checked<T extends { error: any }>(r: T): T {
   if (r.error) throw Error(r.error.message || "Database operation failed.");
   return r;
@@ -212,12 +229,14 @@ export async function loadJournal(userId: string): Promise<Store> {
       quantity: q,
       unit: p.servingUnit || "serving",
       takenAt: r.taken_at,
+      productId:p.calnutrifitProductId,
       nutrition: {
         calories: Number(n.calories || 0) * q,
         protein: Number(n.protein || 0) * q,
         carbs: Number(n.carbs || 0) * q,
         fat: Number(n.fats || 0) * q,
         fiber: Number(n.fiber || 0) * q,
+        ...(p.calnutrifitDetails?{details:scaleDetails(p.calnutrifitDetails,q)}:{}),
       },
     };
   });
@@ -246,10 +265,12 @@ export async function loadJournal(userId: string): Promise<Store> {
       };
     }),
   }));
-  return {
+  const journal: Store = {
     ...emptyStore,
     preferences: extra.preferences,
     shopping: extra.shopping || [],
+    supplementProducts: extra.supplementProducts,
+    healthNotes:extra.healthNotes,bodyMeasurements:extra.bodyMeasurements,
     supplementHistory,
     profile: decodeProfile(prefs),
     entries: entries.map(decodeFood),
@@ -263,6 +284,7 @@ export async function loadJournal(userId: string): Promise<Store> {
       sets: r.exercise_data.sets,
       reps: r.exercise_data.reps,
       weightKg: r.exercise_data.weightKg,
+      description:r.exercise_data.description,met:r.exercise_data.met,bodyWeightKg:r.exercise_data.bodyWeightKg,calorieMethod:r.exercise_data.calorieMethod,
     })),
     weights: weights.map((r) => ({
       id: r.id,
@@ -282,6 +304,11 @@ export async function loadJournal(userId: string): Promise<Store> {
     completed: extra.completed || {},
     level: extra.level || "Beginner",
   };
+  rowSnapshots.set(journal, {
+    food_entries: entries, workout_entries: workouts, weight_logs: weights,
+    fitness_goals: goals, recipes: legacyRecipes, supplement_entries: supplementRows,
+  });
+  return journal;
 }
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -291,21 +318,23 @@ async function syncRows<T extends { id: string }>(
   after: T[],
   userId: string,
   encode: (v: T) => Row,
+  snapshots?: Row[],
 ) {
   for (const row of before.filter((r) => !after.some((a) => a.id === r.id)))
-    checked(
-      await cloud!.from(table).delete().eq("user_id", userId).eq("id", row.id).select("id").single(),
+    confirmedMutation(
+      await guardRow(cloud!.from(table).delete().eq("user_id", userId).eq("id", row.id),
+        snapshots?.find(r => r.id === row.id) || encode(row)).select("id").single(),
     );
   for (const row of after) {
     const old = before.find((b) => b.id === row.id);
     if (old && same(old, row)) continue;
     if (old) {
-      checked(
-        await cloud!
+      confirmedMutation(
+        await guardRow(cloud!
           .from(table)
           .update(encode(row))
           .eq("user_id", userId)
-          .eq("id", row.id)
+          .eq("id", row.id), snapshots?.find(r => r.id === row.id) || encode(old))
           .select("id").single(),
       );
     } else {
@@ -316,9 +345,15 @@ async function syncRows<T extends { id: string }>(
   }
 }
 export async function saveJournal(userId: string, before: Store, next: Store) {
+  const snapshots = rowSnapshots.get(before);
+  // Validate all weights before any network mutation.
+  for (const w of next.weights)
+    if (!Number.isFinite(w.weight) || w.weight < 30 || w.weight > 300)
+      throw Error("Enter a weight between 30 and 300 kg.");
   // Changes are scoped to individual records; no whole-journal replacement.
   await syncRows("food_entries", before.entries, next.entries, userId, (e) =>
     encodeFood(e, userId),
+    snapshots?.food_entries,
   );
   await syncRows(
     "supplement_entries",
@@ -333,6 +368,8 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
       supplement_data: {
         name: r.name,
         servingUnit: r.unit,
+        calnutrifitProductId:r.productId,
+        calnutrifitDetails: scaleDetails(r.nutrition.details,1/r.quantity),
         nutrients: {
           calories: r.nutrition.calories / r.quantity,
           protein: r.nutrition.protein / r.quantity,
@@ -341,7 +378,7 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
           fiber: r.nutrition.fiber / r.quantity,
         },
       },
-    }),
+    }), snapshots?.supplement_entries,
   );
   await syncRows(
     "workout_entries",
@@ -357,12 +394,18 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
         sets: w.sets,
         reps: w.reps,
         weightKg: w.weightKg,
+        description:w.description,met:w.met,bodyWeightKg:w.bodyWeightKg,calorieMethod:w.calorieMethod,
       },
       duration: w.minutes,
       calories_burned: w.calories,
-    }),
+    }), snapshots?.workout_entries,
   );
+  for (const w of before.weights.filter(w => !next.weights.some(n => n.date === w.date))) {
+    confirmedMutation(await cloud!.from("weight_logs").delete().eq("user_id", userId).eq("id", w.id).eq("date",w.date).eq("weight",w.weight).select("id").single());
+  }
   for (const w of next.weights) {
+    if (!Number.isFinite(w.weight) || w.weight < 30 || w.weight > 300)
+      throw Error("Enter a weight between 30 and 300 kg.");
     if (
       same(
         w,
@@ -370,14 +413,17 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
       )
     )
       continue;
-    checked(
-      await cloud!
-        .from("weight_logs")
-        .upsert(
-          { user_id: userId, date: w.date, weight: w.weight },
-          { onConflict: "user_id,date" },
-        ),
-    );
+    const oldWeight = before.weights.find(b => b.date === w.date);
+    if (oldWeight) {
+      confirmedMutation(await cloud!.from("weight_logs").update({weight:w.weight})
+        .eq("user_id",userId).eq("id",oldWeight.id).eq("date",oldWeight.date)
+        .eq("weight",oldWeight.weight).select("id").single());
+    } else {
+      // A competing insert must fail the existing user/date uniqueness constraint.
+      // Upsert would silently overwrite a measurement unseen by this tab.
+      checked(await cloud!.from("weight_logs")
+        .insert({user_id:userId,date:w.date,weight:w.weight}).select("id").single());
+    }
   }
   await syncRows("fitness_goals", before.goals, next.goals, userId, (g) => ({
     user_id: userId,
@@ -387,7 +433,7 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
     target_workouts: g.workouts,
     status: g.status,
     type: "weekly",
-  }));
+  }), snapshots?.fitness_goals);
   await syncRows("recipes", before.recipes, next.recipes, userId, (r) => ({
     user_id: userId,
     name: r.name,
@@ -402,7 +448,7 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
         origin: r.origin,
       },
     })),
-  }));
+  }), snapshots?.recipes);
   const keys = [
     "profile",
     "supplements",
@@ -410,6 +456,9 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
     "level",
     "preferences",
     "shopping",
+    "supplementProducts",
+    "healthNotes",
+    "bodyMeasurements",
   ] as const;
   if (keys.some((k) => !same(before[k], next[k]))) {
     const result = checked(
@@ -421,6 +470,15 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
     );
     const old = result.data?.settings || {};
     const extra = { ...old.calnutrifit };
+    // Compare the fields being edited with the snapshot the user actually saw.
+    // A fresh updated_at alone cannot detect edits made before this SELECT.
+    for (const k of keys) {
+      if (same(before[k], next[k])) continue;
+      const remote = k === "profile" ? decodeProfile(old)
+        : extra[k] ?? (k === "preferences" ? undefined : emptyStore[k]);
+      if (!same(remote, before[k]) && !same(remote, next[k]))
+        throw Error("These settings changed on another device. Reload and review them before saving.");
+    }
     for (const k of keys) if (!same(before[k], next[k])) extra[k] = next[k];
     const profile = next.profile;
     const settings = {

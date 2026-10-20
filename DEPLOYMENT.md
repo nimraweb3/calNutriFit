@@ -4,11 +4,13 @@ Deploy the Vite frontend on Vercel and retain the existing Nutrio Pulse Tracker 
 
 ## Current deployment
 
+For the current 20 October 2026 release, validation and remaining limits, see [the upgrade report](docs/UPGRADE-2026-10-20.md). Earlier dated entries below are historical; the later Lovable-managed Google repair supersedes the direct-Supabase Google setup/blocker notes.
+
 Live site: https://calnutrifit.vercel.app/ . Deployed on 2026-10-12 using Vercel Drop to Deploy with the compiled dist archive. This deployment is not connected to GitHub auto-deploys: the existing Vercel GitHub installation does not currently have access to calNutriFit. Local source changes remain in this workspace. To update the direct deployment, rebuild and upload the new output; to enable Git builds, grant the Vercel installation access to this repository and connect it in project settings.
 
 ## Vercel
 
-Import nimraweb3/calNutriFit. Framework: Vite. Build: `npm run build`. Output: `dist`. Use Node 22. `vercel.json` handles client-side routes and response headers.
+Import nimraweb3/calNutriFit. Framework: Vite. Build: `npm run build`. Output: `dist`. Use Node 24 to match CI. `vercel.json` handles client-side routes and response headers.
 
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or `VITE_SUPABASE_PUBLISHABLE_KEY`) from the existing ignored `.env.local`. These are browser-public credentials protected by Supabase row-level security. Never add service-role keys, database passwords, AI keys, `.env.demo`, or administrator tokens to frontend variables or Git. Redeploy after changing build variables.
 

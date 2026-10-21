@@ -1,3 +1,4 @@
+import {validateGoal} from './personal-goals';
 import {scaleDetails} from './nutrient-data';
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -271,6 +272,7 @@ export async function loadJournal(userId: string): Promise<Store> {
     shopping: extra.shopping || [],
     supplementProducts: extra.supplementProducts,
     healthNotes:extra.healthNotes,bodyMeasurements:extra.bodyMeasurements,
+    personalGoals:extra.personalGoals,dailyCheckIns:extra.dailyCheckIns,uiTheme:extra.uiTheme,
     supplementHistory,
     profile: decodeProfile(prefs),
     entries: entries.map(decodeFood),
@@ -345,6 +347,8 @@ async function syncRows<T extends { id: string }>(
   }
 }
 export async function saveJournal(userId: string, before: Store, next: Store) {
+  for(const goal of next.personalGoals||[])validateGoal(goal);
+  for(const c of next.dailyCheckIns||[])if(!/^\d{4}-\d{2}-\d{2}$/.test(c.date)||!Number.isFinite(c.water)||c.water<0||c.water>20000||!Number.isInteger(c.steps)||c.steps<0||c.steps>200000)throw Error("Check your water and steps totals.");
   const snapshots = rowSnapshots.get(before);
   // Validate all weights before any network mutation.
   for (const w of next.weights)
@@ -459,6 +463,7 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
     "supplementProducts",
     "healthNotes",
     "bodyMeasurements",
+    "personalGoals", "dailyCheckIns", "uiTheme",
   ] as const;
   if (keys.some((k) => !same(before[k], next[k]))) {
     const result = checked(

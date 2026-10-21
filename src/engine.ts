@@ -1,30 +1,332 @@
-import {scaleDetails, nutrientDefinitions, type Details, type NutrientKey} from './nutrient-data';
-import type {Preferences} from './preferences';
-import { z } from 'zod';
-export type Nutrients = { calories:number; protein:number; carbs:number; fat:number; fiber:number; sugar?:number; details?:Details };
-export type Food = Nutrients & { id:string; name:string; category:string; grams:number; unit:string; source:string; note?:string; units?:Record<string,number> };
-export type Entry = { id:string; date:string; meal:string; food:Food; quantity:number; unit:string; grams:number; nutrition:Nutrients; sourceData?:Record<string,unknown> };
-export type Workout = { description?:string;met?:number;bodyWeightKg?:number;calorieMethod?:string; sets?:number; reps?:number; weightKg?:number; id:string; date:string; name:string; minutes:number; calories:number; identity?:string };
-export type Profile = { name:string; age:number; weight:number; height:number; sex:'male'|'female'; activity:number; goal:'maintenance'|'loss'|'gain'; special:boolean; target?:number };
-export type Goal = { id:string; title:string; start:string; end:string; workouts:number; status:'active'|'completed'|'archived' };
-export type Recipe = { instructions?:string; cookMinutes?:number; image?:string; origin?:'manual'|'ai'; id:string; name:string; yield:number; ingredients:{food:Food; quantity:number; unit:string}[] };
-export type Supplement = { archived?:boolean; id:string; name:string; amount:string; calories:number; protein:number; taken:string[] };
-export type SupplementRecord={id:string;date:string;name:string;quantity:number;unit:string;nutrition:Nutrients;takenAt:string;productId?:string};
-export type SupplementProduct={id:string;name:string;unit:string;nutrition:Nutrients;brand?:string;productType?:string;frequency?:'as-needed'|'daily'|'weekly';weekday?:number;started?:string;notes?:string;skippedDates?:string[]};
-export type BodyMeasurement={id:string;date:string;waist?:number;hips?:number;chest?:number;arm?:number;thigh?:number;bodyFat?:number};
-export type PersonalGoal = {id:string;name:string;kind:'weight'|'calories'|'protein'|'water'|'workouts'|'steps'|'custom';target:number;unit:string;current?:number;start:string;end?:string;completed:boolean};
-export type DailyCheckIn = {date:string;water:number;steps:number};
-export type Store = { personalGoals?:PersonalGoal[];dailyCheckIns?:DailyCheckIn[];uiTheme?:'light'|'dark';healthNotes?:string;bodyMeasurements?:BodyMeasurement[]; supplementProducts?:SupplementProduct[]; preferences?:Preferences; shopping?:{id:string;text:string;done:boolean}[]; entries:Entry[]; workouts:Workout[]; weights:{id:string;date:string;weight:number}[]; goals:Goal[]; recipes:Recipe[]; supplements:Supplement[]; supplementHistory:SupplementRecord[]; profile:Profile|null; completed:Record<string,string[]>; level:string };
-export const emptyStore:Store={entries:[],workouts:[],weights:[],goals:[],recipes:[],supplements:[],supplementHistory:[],profile:null,completed:{},level:'Beginner'};
-export const dayKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-export function shiftDay(date:string,amount:number){const d=new Date(date+'T12:00:00');d.setDate(d.getDate()+amount);return dayKey(d)}
-export const profileSchema=z.object({name:z.string().trim().min(1).max(60),age:z.number().min(18).max(100),weight:z.number().min(30).max(300),height:z.number().min(120).max(230),sex:z.enum(['male','female']),activity:z.union([z.literal(1.2),z.literal(1.375),z.literal(1.55),z.literal(1.725),z.literal(1.9)]),goal:z.enum(['maintenance','loss','gain']),special:z.boolean(),target:z.number().min(1200).max(6000).optional()});
-export function targets(p:Profile|null){if(!p||p.special)return null;const result=profileSchema.safeParse(p);if(!result.success)return null;const bmr=10*p.weight+6.25*p.height-5*p.age+(p.sex==='male'?5:-161);const tdee=bmr*p.activity;const calories=p.target??Math.max(p.sex==='male'?1500:1200,tdee*(p.goal==='loss'?.8:p.goal==='gain'?1.1:1));const protein=p.weight*(p.goal==='gain'?2.2:1.8);const fat=calories*.25/9;return {calories:Math.round(calories),protein:Math.round(protein),carbs:Math.round(Math.max(0,(calories-protein*4-fat*9)/4)),fat:Math.round(fat),fiber:30,tdee:Math.round(tdee)}}
-export const zero={calories:0,protein:0,carbs:0,fat:0,fiber:0};
-export function portion(food:Food,quantity:number,unit:string){if(!Number.isFinite(quantity)||quantity<=0||quantity>10000)throw Error('Enter a quantity greater than zero.');if(!Number.isFinite(food.grams)||food.grams<=0)throw Error('This food has no valid reference serving.');if(Object.keys(zero).some(k=>!Number.isFinite(food[k as keyof Nutrients])||Number(food[k as keyof Nutrients])<0))throw Error('This food has incomplete or invalid nutrition.');const grams=unit==='g'?quantity:quantity*(food.units?.[unit]??(unit===food.unit?food.grams:NaN));if(!Number.isFinite(grams)||grams<=0)throw Error('This unit has no verified conversion for this food.');const ratio=grams/food.grams;return {grams,nutrition:{...Object.fromEntries(Object.keys(zero).map(k=>[k,Number(food[k as keyof Nutrients])*ratio])),...(food.details?{details:scaleDetails(food.details,ratio)}:{})} as Nutrients}}
-export function total(values:Nutrients[]):Nutrients {const result=values.reduce((a,v)=>({calories:a.calories+v.calories,protein:a.protein+v.protein,carbs:a.carbs+v.carbs,fat:a.fat+v.fat,fiber:a.fiber+v.fiber}),{...zero}) as Nutrients;
- const details:Details={};for(const k of Object.keys(nutrientDefinitions) as NutrientKey[])if(values.length&&values.every(v=>Number.isFinite(v.details?.[k])))details[k]=values.reduce((sum,v)=>sum+v.details![k]!,0);
- if(Object.keys(details).length)result.details=details;return result;}
-export function workoutCalories(met:number,weight:number,minutes:number){if(![met,weight,minutes].every(Number.isFinite)||met<=0||weight<=0||minutes<=0)throw Error('Enter valid activity, weight and active minutes.');return Math.round(met*3.5*weight/200*minutes)}
-export function streak(dates:string[],today=dayKey()){const set=new Set(dates);let cursor=set.has(today)?today:shiftDay(today,-1),current=0;while(set.has(cursor)){current++;cursor=shiftDay(cursor,-1)}let best=0,run=0,last='';[...set].filter(d=>d<=today).sort().forEach(d=>{run=last&&shiftDay(last,1)===d?run+1:1;best=Math.max(best,run);last=d});return {current,best}}
-export function recipeFood(r:Recipe):Food{if(!Number.isFinite(r.yield)||r.yield<=0||!r.ingredients.length)throw Error('A recipe needs ingredients and a positive serving count.');const n=total(r.ingredients.map(i=>portion(i.food,i.quantity,i.unit).nutrition));return {...Object.fromEntries(Object.entries(n).filter(([k])=>k!=='details').map(([k,v])=>[k,Number(v)/r.yield])) as unknown as Nutrients,...(n.details?{details:scaleDetails(n.details,1/r.yield)}:{}),id:r.id,name:r.name,category:'My recipes',grams:r.ingredients.reduce((a,i)=>a+portion(i.food,i.quantity,i.unit).grams,0)/r.yield,unit:'serving',source:'User recipe · ingredient estimates'}}
+import {
+  scaleDetails,
+  nutrientDefinitions,
+  type Details,
+  type NutrientKey,
+} from "./nutrient-data";
+import type { Preferences } from "./preferences";
+import { z } from "zod";
+export type Nutrients = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar?: number;
+  details?: Details;
+};
+export type Food = Nutrients & {
+  id: string;
+  name: string;
+  category: string;
+  grams: number;
+  unit: string;
+  source: string;
+  note?: string;
+  units?: Record<string, number>;
+};
+export type Entry = {
+  id: string;
+  date: string;
+  meal: string;
+  food: Food;
+  quantity: number;
+  unit: string;
+  grams: number;
+  nutrition: Nutrients;
+  sourceData?: Record<string, unknown>;
+};
+export type Workout = {
+  description?: string;
+  met?: number;
+  bodyWeightKg?: number;
+  calorieMethod?: string;
+  sets?: number;
+  reps?: number;
+  weightKg?: number;
+  id: string;
+  date: string;
+  name: string;
+  minutes: number;
+  calories: number;
+  identity?: string;
+};
+export type Profile = {
+  name: string;
+  age: number;
+  weight: number;
+  height: number;
+  sex: "male" | "female";
+  activity: number;
+  goal: "maintenance" | "loss" | "gain";
+  special: boolean;
+  target?: number;
+};
+export type Goal = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  workouts: number;
+  status: "active" | "completed" | "archived";
+};
+export type Recipe = {
+  instructions?: string;
+  cookMinutes?: number;
+  image?: string;
+  origin?: "manual" | "ai";
+  id: string;
+  name: string;
+  yield: number;
+  ingredients: { food: Food; quantity: number; unit: string }[];
+};
+export type Supplement = {
+  archived?: boolean;
+  id: string;
+  name: string;
+  amount: string;
+  calories: number;
+  protein: number;
+  taken: string[];
+};
+export type SupplementRecord = {
+  id: string;
+  date: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  nutrition: Nutrients;
+  takenAt: string;
+  productId?: string;
+};
+export type SupplementProduct = {
+  id: string;
+  name: string;
+  unit: string;
+  nutrition: Nutrients;
+  brand?: string;
+  productType?: string;
+  frequency?: "as-needed" | "daily" | "weekly";
+  weekday?: number;
+  started?: string;
+  notes?: string;
+  skippedDates?: string[];
+};
+export type BodyMeasurement = {
+  id: string;
+  date: string;
+  waist?: number;
+  hips?: number;
+  chest?: number;
+  arm?: number;
+  thigh?: number;
+  bodyFat?: number;
+};
+export type PersonalGoal = {
+  id: string;
+  name: string;
+  kind:
+    | "weight"
+    | "calories"
+    | "protein"
+    | "water"
+    | "workouts"
+    | "steps"
+    | "custom";
+  target: number;
+  unit: string;
+  current?: number;
+  start: string;
+  end?: string;
+  completed: boolean;
+};
+export type DailyCheckIn = { date: string; water: number; steps: number };
+export type Store = {
+  personalGoals?: PersonalGoal[];
+  dailyCheckIns?: DailyCheckIn[];
+  uiTheme?: "light" | "dark";
+  healthNotes?: string;
+  bodyMeasurements?: BodyMeasurement[];
+  supplementProducts?: SupplementProduct[];
+  preferences?: Preferences;
+  shopping?: { id: string; text: string; done: boolean }[];
+  entries: Entry[];
+  workouts: Workout[];
+  weights: { id: string; date: string; weight: number }[];
+  goals: Goal[];
+  recipes: Recipe[];
+  supplements: Supplement[];
+  supplementHistory: SupplementRecord[];
+  profile: Profile | null;
+  completed: Record<string, string[]>;
+  level: string;
+};
+export const emptyStore: Store = {
+  entries: [],
+  workouts: [],
+  weights: [],
+  goals: [],
+  recipes: [],
+  supplements: [],
+  supplementHistory: [],
+  profile: null,
+  completed: {},
+  level: "Beginner",
+};
+export const dayKey = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function shiftDay(date: string, amount: number) {
+  const d = new Date(date + "T12:00:00");
+  d.setDate(d.getDate() + amount);
+  return dayKey(d);
+}
+export const profileSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  age: z.number().min(18).max(100),
+  weight: z.number().min(30).max(300),
+  height: z.number().min(120).max(230),
+  sex: z.enum(["male", "female"]),
+  activity: z.union([
+    z.literal(1.2),
+    z.literal(1.375),
+    z.literal(1.55),
+    z.literal(1.725),
+    z.literal(1.9),
+  ]),
+  goal: z.enum(["maintenance", "loss", "gain"]),
+  special: z.boolean(),
+  target: z.number().min(1200).max(6000).optional(),
+});
+export function targets(p: Profile | null) {
+  if (!p || p.special) return null;
+  const result = profileSchema.safeParse(p);
+  if (!result.success) return null;
+  const bmr =
+    10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "male" ? 5 : -161);
+  const tdee = bmr * p.activity;
+  const calories =
+    p.target ??
+    Math.max(
+      p.sex === "male" ? 1500 : 1200,
+      tdee * (p.goal === "loss" ? 0.8 : p.goal === "gain" ? 1.1 : 1),
+    );
+  const protein = p.weight * (p.goal === "gain" ? 2.2 : 1.8);
+  const fat = (calories * 0.25) / 9;
+  return {
+    calories: Math.round(calories),
+    protein: Math.round(protein),
+    carbs: Math.round(Math.max(0, (calories - protein * 4 - fat * 9) / 4)),
+    fat: Math.round(fat),
+    fiber: 30,
+    tdee: Math.round(tdee),
+  };
+}
+export const zero = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+export function portion(food: Food, quantity: number, unit: string) {
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000)
+    throw Error("Enter a quantity greater than zero.");
+  if (!Number.isFinite(food.grams) || food.grams <= 0)
+    throw Error("This food has no valid reference serving.");
+  if (
+    Object.keys(zero).some(
+      (k) =>
+        !Number.isFinite(food[k as keyof Nutrients]) ||
+        Number(food[k as keyof Nutrients]) < 0,
+    )
+  )
+    throw Error("This food has incomplete or invalid nutrition.");
+  const grams =
+    unit === "g"
+      ? quantity
+      : quantity *
+        (food.units?.[unit] ?? (unit === food.unit ? food.grams : NaN));
+  if (!Number.isFinite(grams) || grams <= 0)
+    throw Error("This unit has no verified conversion for this food.");
+  const ratio = grams / food.grams;
+  return {
+    grams,
+    nutrition: {
+      ...Object.fromEntries(
+        Object.keys(zero).map((k) => [
+          k,
+          Number(food[k as keyof Nutrients]) * ratio,
+        ]),
+      ),
+      ...(food.details ? { details: scaleDetails(food.details, ratio) } : {}),
+    } as Nutrients,
+  };
+}
+export function total(values: Nutrients[]): Nutrients {
+  const result = values.reduce(
+    (a, v) => ({
+      calories: a.calories + v.calories,
+      protein: a.protein + v.protein,
+      carbs: a.carbs + v.carbs,
+      fat: a.fat + v.fat,
+      fiber: a.fiber + v.fiber,
+    }),
+    { ...zero },
+  ) as Nutrients;
+  const details: Details = {};
+  for (const k of Object.keys(nutrientDefinitions) as NutrientKey[])
+    if (values.length && values.every((v) => Number.isFinite(v.details?.[k])))
+      details[k] = values.reduce((sum, v) => sum + v.details![k]!, 0);
+  if (Object.keys(details).length) result.details = details;
+  return result;
+}
+export function workoutCalories(met: number, weight: number, minutes: number) {
+  if (
+    ![met, weight, minutes].every(Number.isFinite) ||
+    met <= 0 ||
+    weight <= 0 ||
+    minutes <= 0
+  )
+    throw Error("Enter valid activity, weight and active minutes.");
+  return Math.round(((met * 3.5 * weight) / 200) * minutes);
+}
+export function streak(dates: string[], today = dayKey()) {
+  const set = new Set(dates);
+  let cursor = set.has(today) ? today : shiftDay(today, -1),
+    current = 0;
+  while (set.has(cursor)) {
+    current++;
+    cursor = shiftDay(cursor, -1);
+  }
+  let best = 0,
+    run = 0,
+    last = "";
+  [...set]
+    .filter((d) => d <= today)
+    .sort()
+    .forEach((d) => {
+      run = last && shiftDay(last, 1) === d ? run + 1 : 1;
+      best = Math.max(best, run);
+      last = d;
+    });
+  return { current, best };
+}
+export function recipeFood(r: Recipe): Food {
+  if (!Number.isFinite(r.yield) || r.yield <= 0 || !r.ingredients.length)
+    throw Error("A recipe needs ingredients and a positive serving count.");
+  const n = total(
+    r.ingredients.map((i) => portion(i.food, i.quantity, i.unit).nutrition),
+  );
+  return {
+    ...(Object.fromEntries(
+      Object.entries(n)
+        .filter(([k]) => k !== "details")
+        .map(([k, v]) => [k, Number(v) / r.yield]),
+    ) as unknown as Nutrients),
+    ...(n.details ? { details: scaleDetails(n.details, 1 / r.yield) } : {}),
+    id: r.id,
+    name: r.name,
+    category: "My recipes",
+    grams:
+      r.ingredients.reduce(
+        (a, i) => a + portion(i.food, i.quantity, i.unit).grams,
+        0,
+      ) / r.yield,
+    unit: "serving",
+    source: "User recipe · ingredient estimates",
+  };
+}

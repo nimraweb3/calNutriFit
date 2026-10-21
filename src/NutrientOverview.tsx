@@ -1,0 +1,11 @@
+import {useState,lazy,Suspense} from 'react';
+import {detailContribution,nutrientDefinitions,type NutrientKey} from './nutrient-data';
+import {nutrientTarget} from './nutrient-targets';
+import {zero,type Store} from './engine';
+const NutritionView=lazy(()=>import('./NutritionView')); 
+export default function NutrientOverview({data,date}:{data:Store;date:string}){
+ const [all,setAll]=useState(false);
+ const food=data.entries.filter(e=>e.date===date).map(e=>e.nutrition),supplements=[...data.supplementHistory.filter(e=>e.date===date).map(e=>e.nutrition),...data.supplements.filter(s=>s.taken.includes(date)).map(()=>({...zero}))];
+ const keys:NutrientKey[]=['vitaminC','vitaminD','vitaminB12','calcium','iron','magnesium','potassium','zinc'];
+ return <section className="card nutrient-overview"><h2>Nutrient Overview</h2><p className="help">Known amounts from food and supplements.</p><details open><summary>Vitamins &amp; Minerals</summary><div className="compact-nutrients">{keys.map(key=>{const f=detailContribution(food,key),s=detailContribution(supplements,key),known=f.known+s.known>0,amount=(f.value??0)+(s.value??0),t=nutrientTarget(key,data.profile),over=!!t&&t.ul!==null&&(t.scope==='supplements'?(s.value??0):amount)>t.ul;return <div key={key}><div><span>{nutrientDefinitions[key][0]}</span><strong>{known?Number(amount.toFixed(2)):'—'}{t?` / ${t.rda}`:''} <small>{nutrientDefinitions[key][1]}</small></strong></div>{known&&t&&<progress aria-label={`${nutrientDefinitions[key][0]} progress`} max={t.rda} value={Math.min(amount,t.rda)}/>}<small>Food {f.value===null?'unknown':Number(f.value.toFixed(2))} · Supplements {s.value===null?'unknown':Number(s.value.toFixed(2))}{f.missing+s.missing>0?' · Incomplete':''}</small>{over&&<p className="error">Above upper reference limit. Review intake with a clinician.</p>}</div>})}</div></details><p className="help">— means unknown, not zero. References are not diagnoses.</p><button className="text-button" aria-expanded={all} onClick={()=>setAll(!all)}>{all?'Show less':'View all nutrients & history'}</button>{all&&<Suspense fallback={<p>Loading details…</p>}><NutritionView key={date} data={data} initialDate={date} embedded/></Suspense>}</section>;
+}

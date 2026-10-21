@@ -15,7 +15,7 @@ try{
  const nutrition={calories:10,protein:1,carbs:1,fat:0,fiber:0,details:{calcium:500,vitaminD:0}};
  const food={...nutrition,id:crypto.randomUUID(),name:marker,category:'Test fixture',grams:100,unit:'g',source:'Synthetic test only'};
  const product={id:crypto.randomUUID(),name:marker,unit:'tablet',nutrition,brand:'Synthetic test brand',frequency:'weekly',weekday:2,started:date,skippedDates:[date]};
- const next={...original,healthNotes:marker,bodyMeasurements:[...(original.bodyMeasurements||[]),{id:crypto.randomUUID(),date,waist:80.25}],
+ const next={...original,uiTheme:"dark",personalGoals:[...(original.personalGoals||[]),{id:crypto.randomUUID(),name:marker,kind:"water",target:2000,unit:"ml",start:date,completed:false}],dailyCheckIns:[...(original.dailyCheckIns||[]).filter(c=>c.date!==date),{date,water:750,steps:3500}],healthNotes:marker,bodyMeasurements:[...(original.bodyMeasurements||[]),{id:crypto.randomUUID(),date,waist:80.25}],
   supplementProducts:[...(original.supplementProducts||[]),product],
   entries:[...original.entries,{id:crypto.randomUUID(),date,meal:'Lunch',food,quantity:100,unit:'g',grams:100,nutrition}],
   goals:[...original.goals,{id:crypto.randomUUID(),title:marker,start:date,end:date,workouts:1,status:'active'}],
@@ -29,6 +29,7 @@ try{
  if(relogin.error)throw Error('Synthetic reauthentication failed');
  const loaded=await backend.loadJournal(uid);
  assert.equal(loaded.healthNotes,marker);
+ assert.equal(loaded.uiTheme,"dark");assert.equal(loaded.personalGoals.find(g=>g.name===marker).target,2000);assert.equal(loaded.dailyCheckIns.find(c=>c.date===date).water,750);
  assert.equal(loaded.bodyMeasurements.find(r=>r.date===date).waist,80.25);
  assert.equal(loaded.supplementProducts.find(p=>p.id===product.id).frequency,'weekly');
  assert.equal(loaded.supplementHistory.find(p=>p.name===marker).productId,product.id);
@@ -37,6 +38,9 @@ try{
  assert.equal(loaded.workouts.find(w=>w.name===marker).description,'Synthetic custom activity');
  assert.equal(loaded.workouts.find(w=>w.name===marker).calorieMethod,'manual');
  assert.equal(loaded.weights.find(w=>w.date===date).weight,72.345678);
+ const goalEdited=await backend.saveJournal(uid,loaded,{...loaded,personalGoals:loaded.personalGoals.map(g=>g.name===marker?{...g,target:2500,completed:true}:g)});
+ assert.equal(goalEdited.personalGoals.find(g=>g.name===marker).target,2500);assert.equal(goalEdited.personalGoals.find(g=>g.name===marker).completed,true);
+ console.log('PASS: goals, check-ins and theme survived reload; goal editing/completion persisted.');
  console.log('PASS: product schedules, dose nutrients/linkage, notes, body measurements, custom workout metadata and weight survived logout/login and fresh database load.');
  // Reject an edit using the pre-save settings snapshot.
  await assert.rejects(()=>backend.saveJournal(uid,original,{...original,supplementProducts:[{...product,name:'stale write'}]}),/another device/);
@@ -64,7 +68,7 @@ finally{
   try{
    const current=await backend.loadJournal(uid);
    const cleaned=await backend.saveJournal(uid,current,{...current,
-    supplementProducts:original.supplementProducts,healthNotes:original.healthNotes,bodyMeasurements:original.bodyMeasurements,
+    personalGoals:original.personalGoals,dailyCheckIns:original.dailyCheckIns,uiTheme:original.uiTheme,supplementProducts:original.supplementProducts,healthNotes:original.healthNotes,bodyMeasurements:original.bodyMeasurements,
     entries:current.entries.filter(r=>r.food.name!==marker),
     goals:current.goals.filter(r=>r.title!==marker),
     recipes:current.recipes.filter(r=>r.name!==marker),

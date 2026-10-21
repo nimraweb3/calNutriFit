@@ -9,3 +9,6 @@ dist/
 
 # Personal learning notes; keep the local file out of version control.
 /TECH_STACK_EXPLAINED.md
+
+# Local Lighthouse captures (public page only).
+/lighthouse-*.json

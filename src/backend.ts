@@ -194,7 +194,15 @@ async function allRows(table: string, userId: string) {
   }
   return rows;
 }
-export async function loadJournal(userId: string): Promise<Store> {
+const pendingJournals = new Map<string, Promise<Store>>();
+export function loadJournal(userId: string): Promise<Store> {
+  const pending = pendingJournals.get(userId);
+  if (pending) return pending;
+  const request = fetchJournal(userId).finally(() => { if (pendingJournals.get(userId) === request) pendingJournals.delete(userId) });
+  pendingJournals.set(userId, request);
+  return request;
+}
+async function fetchJournal(userId: string): Promise<Store> {
   const [
     settings,
     entries,
@@ -527,5 +535,5 @@ export async function saveJournal(userId: string, before: Store, next: Store) {
           .insert({ user_id: userId, settings }),
       );
   }
-  return loadJournal(userId);
+  return fetchJournal(userId);
 }

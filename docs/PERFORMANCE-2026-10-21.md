@@ -14,16 +14,16 @@ Published at https://calnutrifit.vercel.app, deployment dpl_8WJ5rszc23pFH7YejFj8
 ## Measured results
 Lighthouse CLI, default mobile simulation, same public production URL and machine. These are single lab runs, not field Core Web Vitals or a guarantee for every device.
 
-| Metric | Before | Final |
-| --- | ---: | ---: |
-| Performance | 69 | 80 |
-| Accessibility | 93 | 100 |
-| Best practices | 100 | 100 |
-| SEO | 100 | 100 |
-| Total blocking time | 510 ms | 0 ms |
-| First contentful paint | 3.6 s | 3.7 s |
-| Largest contentful paint | 3.6 s | 3.7 s |
-| Layout shift | 0 | 0.003 |
+| Metric                   | Before | Final |
+| ------------------------ | -----: | ----: |
+| Performance              |     69 |    80 |
+| Accessibility            |     93 |   100 |
+| Best practices           |    100 |   100 |
+| SEO                      |    100 |   100 |
+| Total blocking time      | 510 ms |  0 ms |
+| First contentful paint   |  3.6 s | 3.7 s |
+| Largest contentful paint |  3.6 s | 3.7 s |
+| Layout shift             |      0 | 0.003 |
 
 Initial entry bundle: roughly 720 KB to 148 KB uncompressed (the new entry is ~49 KB gzip, plus a ~3 KB gzip shared runtime). The journal and Three.js remain substantial deferred chunks; Vite still reports large-chunk warnings. Initial paint did not improve in this run and remains an optimization opportunity.
 
